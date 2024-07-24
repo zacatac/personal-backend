@@ -14,10 +14,7 @@ security = HTTPBearer()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://personal-backend-production.up.railway.app",
-    ],
+    allow_origins=["http://localhost:5173", "https://app.zackeryfield.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
