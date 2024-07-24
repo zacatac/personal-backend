@@ -16,7 +16,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "personal-backend-production.up.railway.app",
+        "http://personal-backend-production.up.railway.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -28,8 +28,6 @@ CLERK_JWKS_URL = f"{CLERK_JWT_ISSUER}/.well-known/jwks.json"
 
 if CLERK_JWT_ISSUER is None or CLERK_JWT_ISSUER == "":
     raise ValueError("Missing CLERK_JWT_ISSUER")
-
-print(CLERK_JWKS_URL)
 
 # Initialize the PyJWKClient
 jwks_client = PyJWKClient(CLERK_JWKS_URL)
