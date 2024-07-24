@@ -1,9 +1,12 @@
+import time
+import os
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import jwt
 from jwt import PyJWKClient
-import os
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
@@ -59,7 +62,6 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
             token,
             signing_key,
             algorithms=["RS256"],
-            # audience="your-audience",  # Set this to your application's audience
             issuer=CLERK_JWT_ISSUER,
             options={
                 "verify_signature": True,
@@ -84,3 +86,14 @@ async def user(token_data: dict = Depends(verify_token), db: Session = Depends(g
     clerk_id = token_data["sub"]
     user = get_or_create_user(db=db, clerk_id=clerk_id)
     return user
+
+
+def generate_numbers():
+    for i in range(1, 101):
+        time.sleep(0.1)  # simulate a delay
+        yield f"data: {i}\n\n"
+
+
+@app.get("/stream")
+def stream_numbers():
+    return StreamingResponse(generate_numbers(), media_type="text/event-stream")
