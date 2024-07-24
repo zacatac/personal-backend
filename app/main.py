@@ -5,6 +5,11 @@ import jwt
 from jwt import PyJWKClient
 import os
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
+from app.crud import get_or_create_user
+from app.schemas import User
+from app.database import SessionLocal
 
 load_dotenv()
 
@@ -28,6 +33,14 @@ if CLERK_JWT_ISSUER is None or CLERK_JWT_ISSUER == "":
 
 # Initialize the PyJWKClient
 jwks_client = PyJWKClient(CLERK_JWKS_URL)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def get_signing_key(token):
@@ -66,10 +79,8 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 
-async def not_so_protected_route():
-    return {"message": f"Hello anon!"}
-
-
-@app.get("/api/protected")
-async def protected_route(token_data: dict = Depends(verify_token)):
-    return {"message": f"Hello, user {token_data['sub']}!"}
+@app.get("/me", response_model=User)
+async def user(token_data: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    clerk_id = token_data["sub"]
+    user = get_or_create_user(db=db, clerk_id=clerk_id)
+    return user
