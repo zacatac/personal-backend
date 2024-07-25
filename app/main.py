@@ -1,5 +1,6 @@
-import time
 import os
+import asyncio
+from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,10 +9,16 @@ from fastapi.responses import StreamingResponse
 import jwt
 from jwt import PyJWKClient
 from dotenv import load_dotenv
+from openai.types.chat import (
+    ChatCompletionUserMessageParam,
+)
 from sqlalchemy.orm import Session
 
-from app.crud import get_or_create_user
-from app.schemas import User
+from app.ai import generate_chat, messages_from_context
+from app.crud import get_or_create_bot, get_or_create_user, persist_next_message
+from app.lib import async_tee
+import app.models as models
+import app.schemas as schemas
 from app.database import SessionLocal
 
 load_dotenv()
@@ -28,6 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ENV = os.getenv("ENV")
+DEV_USER_ID = "user_2jfLb9a9wPGdc4vSPE1G3h8OVVI"
 CLERK_JWT_ISSUER = os.getenv("CLERK_JWT_ISSUER")
 CLERK_JWKS_URL = f"{CLERK_JWT_ISSUER}/.well-known/jwks.json"
 
@@ -52,6 +61,19 @@ def get_signing_key(token):
         return signing_key.key
     except jwt.exceptions.PyJWKClientError as error:
         raise HTTPException(status_code=401, detail=str(error))
+
+
+async def optional_verify_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Optional[dict]:
+    try:
+        return await verify_token(credentials)
+    except HTTPException as e:
+        if ENV == "dev":
+            return {
+                "sub": DEV_USER_ID,
+            }
+        raise e
 
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -81,19 +103,48 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 
-@app.get("/me", response_model=User)
-async def user(token_data: dict = Depends(verify_token), db: Session = Depends(get_db)):
+@app.get("/me", response_model=schemas.User)
+async def user(
+    token_data: dict = Depends(optional_verify_token), db: Session = Depends(get_db)
+):
     clerk_id = token_data["sub"]
     user = get_or_create_user(db=db, clerk_id=clerk_id)
     return user
 
 
-def generate_numbers():
-    for i in range(1, 101):
-        time.sleep(0.1)  # simulate a delay
-        yield f"data: {i}\n\n"
+@app.get("/chat")
+async def stream_chat(
+    message: str,
+    token_data: dict = Depends(optional_verify_token),
+    db: Session = Depends(get_db),
+):
+    clerk_id = token_data["sub"]
+    user = db.query(models.User).filter_by(clerk_id=clerk_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    bot = get_or_create_bot(db=db, user_id=user.id)
+    messages = []
+    if bot.context is not None:
+        messages = messages_from_context(context=bot.context)
+    messages.append(
+        ChatCompletionUserMessageParam(
+            role="user",
+            content=message,
+        )
+    )
 
+    # Tee off the generating message to respond to the user and persist in parallel.
+    accumulator, responder = await async_tee(generate_chat(messages))
 
-@app.get("/stream")
-def stream_numbers():
-    return StreamingResponse(generate_numbers(), media_type="text/event-stream")
+    # Start the accumulator consumer in the background
+    asyncio.create_task(
+        persist_next_message(
+            db=db,
+            bot=bot,
+            accumulator=accumulator,
+            messages=messages,
+            input_message=message,
+        )
+    )
+
+    return StreamingResponse(responder, media_type="text/event-stream")
