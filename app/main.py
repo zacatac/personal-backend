@@ -38,6 +38,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://app.zackeryfield.com",
+        "https://zackeryfield.com",
         "https://api.zackeryfield.com",
     ],
     allow_credentials=True,
