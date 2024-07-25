@@ -1,6 +1,9 @@
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
+import tiktoken
+
+from app.ai import messages_from_context
 
 
 class UserBase(BaseModel):
@@ -32,6 +35,21 @@ class Bot(BotBase):
     id: UUID
     creator_id: UUID
     creator: User
+
+    @computed_field
+    @property
+    def tokens(self) -> int:
+        if self.context is None or len(self.context.get("messages", [])) == 0:
+            return 0
+
+        messages_concat = "".join(
+            map(
+                lambda m: str(m["content"]) if "content" in m else "",
+                messages_from_context(self.context),
+            )
+        )
+        enc = tiktoken.encoding_for_model("gpt-4o")
+        return len(enc.encode(messages_concat))
 
     class Config:
         orm_mode = True
