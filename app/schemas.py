@@ -14,7 +14,6 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: UUID
     is_active: bool
-    bots: List["Bot"] = []
 
     class Config:
         orm_mode = True

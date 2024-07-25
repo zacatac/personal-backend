@@ -112,7 +112,7 @@ async def user(
     return user
 
 
-@app.get("/chat")
+@app.get("/chat", response_class=StreamingResponse)
 async def stream_chat(
     message: str,
     token_data: dict = Depends(optional_verify_token),

@@ -51,7 +51,11 @@ async def generate_chat(
     async for chunk in stream:
         if chunk.usage:
             print(chunk.usage)
-        if chunk.choices is not None and chunk.choices[0].delta.content is not None:
+        if (
+            chunk.choices is not None
+            and len(chunk.choices) > 0
+            and chunk.choices[0].delta.content is not None
+        ):
 
             content = chunk.choices[0].delta.content
             yield content

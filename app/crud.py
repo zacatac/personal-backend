@@ -21,7 +21,7 @@ def get_or_create_user(db: Session, clerk_id: str):
 def get_or_create_bot(db: Session, user_id: Column[UUID]):
     bot = db.query(models.Bot).filter(models.Bot.creator_id == user_id).first()
     if bot is None:
-        db_bot = models.Bot(creator_id=user_id)
+        db_bot = models.Bot(creator_id=user_id, name="ralph")
         db.add(db_bot)
         db.commit()
         db.refresh(db_bot)
