@@ -44,13 +44,16 @@ async def generate_chat(
         model=model,
         messages=messages,
         stream=True,
+        stream_options={"include_usage": True},
     )
 
     logger.info("processing stream")
     async for chunk in stream:
-        if chunk.choices[0].delta.content is not None:
+        if chunk.usage:
+            print(chunk.usage)
+        if chunk.choices is not None and chunk.choices[0].delta.content is not None:
+
             content = chunk.choices[0].delta.content
-            logger.info("yielded chunk")
             yield content
 
 
