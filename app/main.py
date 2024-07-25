@@ -1,6 +1,8 @@
 import os
 import asyncio
+from re import M
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -9,17 +11,21 @@ from fastapi.responses import StreamingResponse
 import jwt
 from jwt import PyJWKClient
 from dotenv import load_dotenv
-from openai.types.chat import (
-    ChatCompletionUserMessageParam,
-)
 from sqlalchemy.orm import Session
 
 from app.ai import generate_chat, messages_from_context
-from app.crud import get_or_create_bot, get_or_create_user, persist_next_message
+from app.crud import (
+    get_bot,
+    get_or_create_bot,
+    get_or_create_user,
+    get_user,
+    persist_next_message,
+)
 from app.lib import async_tee
 import app.models as models
 import app.schemas as schemas
 from app.database import SessionLocal
+from app.types import ChatCompletionUserMessageParamID
 
 load_dotenv()
 
@@ -112,6 +118,30 @@ async def user(
     return user
 
 
+@app.delete("/bot")
+async def delete_bot(
+    token_data: dict = Depends(optional_verify_token), db: Session = Depends(get_db)
+):
+    clerk_id = token_data["sub"]
+    user = get_user(db=db, clerk_id=clerk_id)
+    bot = get_bot(db=db, user_id=user.id)
+    if bot:
+        db.delete(bot)
+        db.commit()
+        return {"detail": "Bot deleted successfully"}
+    else:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+
+@app.get("/bot", response_model=schemas.Bot)
+async def bot(
+    token_data: dict = Depends(optional_verify_token), db: Session = Depends(get_db)
+):
+    clerk_id = token_data["sub"]
+    user = get_user(db=db, clerk_id=clerk_id)
+    return get_or_create_bot(db=db, user_id=user.id)
+
+
 @app.get("/chat", response_class=StreamingResponse)
 async def stream_chat(
     message: str,
@@ -124,12 +154,14 @@ async def stream_chat(
         raise HTTPException(status_code=404, detail="User not found")
     bot = get_or_create_bot(db=db, user_id=user.id)
     messages = []
+    response_message_id = str(uuid4())
     if bot.context is not None:
         messages = messages_from_context(context=bot.context)
     messages.append(
-        ChatCompletionUserMessageParam(
+        ChatCompletionUserMessageParamID(
             role="user",
             content=message,
+            id=str(uuid4()),
         )
     )
 
@@ -143,7 +175,7 @@ async def stream_chat(
             bot=bot,
             accumulator=accumulator,
             messages=messages,
-            input_message=message,
+            message_id=response_message_id,
         )
     )
 

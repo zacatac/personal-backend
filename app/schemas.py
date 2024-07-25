@@ -35,3 +35,6 @@ class Bot(BotBase):
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            UUID: str,
+        }
