@@ -1,20 +1,14 @@
-from dataclasses import asdict
 import logging
+from typing import AsyncGenerator, List
 
-from typing import Any, AsyncGenerator, Dict, Generator, List
-
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionUserMessageParam,
 )
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 
-from app.types import (
-    ChatCompletionAssistantMessageParamID,
-    ChatCompletionMessageParamID,
-    ChatCompletionUserMessageParamID,
-)
+from app.types import ChatCompletionMessageParamID
 
 
 client = AsyncOpenAI()
@@ -22,30 +16,6 @@ client = AsyncOpenAI()
 model = "gpt-4o-mini"
 
 logger = logging.getLogger(__name__)
-
-
-def messages_from_context(
-    context: Dict[str, Any]
-) -> List[ChatCompletionMessageParamID]:
-    messages_json = context.get("messages", [])
-    messages: List[ChatCompletionMessageParamID] = []
-    for message in messages_json:
-        role = message.get("role")
-        content = message.get("content")
-        id = message.get("id")
-        if role == "user":
-            messages.append(
-                ChatCompletionUserMessageParamID(role="user", content=content, id=id)
-            )
-        elif role == "assistant":
-            messages.append(
-                ChatCompletionAssistantMessageParamID(
-                    role="assistant", content=content, id=id
-                )
-            )
-        else:
-            raise ValueError("unexpected message role")
-    return messages
 
 
 def transform_to_openai_type(

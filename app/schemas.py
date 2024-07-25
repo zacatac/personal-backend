@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, computed_field
 import tiktoken
 
-from app.ai import messages_from_context
+from app.lib import messages_from_context, tokens_for_context
 
 
 class UserBase(BaseModel):
@@ -39,17 +39,7 @@ class Bot(BotBase):
     @computed_field
     @property
     def tokens(self) -> int:
-        if self.context is None or len(self.context.get("messages", [])) == 0:
-            return 0
-
-        messages_concat = "".join(
-            map(
-                lambda m: str(m["content"]) if "content" in m else "",
-                messages_from_context(self.context),
-            )
-        )
-        enc = tiktoken.encoding_for_model("gpt-4o")
-        return len(enc.encode(messages_concat))
+        return tokens_for_context(self.context)
 
     class Config:
         orm_mode = True

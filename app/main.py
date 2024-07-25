@@ -13,7 +13,7 @@ from jwt import PyJWKClient
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from app.ai import generate_chat, messages_from_context
+from app.ai import generate_chat
 from app.crud import (
     get_bot,
     get_or_create_bot,
@@ -21,7 +21,7 @@ from app.crud import (
     get_user,
     persist_next_message,
 )
-from app.lib import async_tee
+from app.lib import async_tee, messages_from_context, tokens_for_context
 import app.models as models
 import app.schemas as schemas
 from app.database import SessionLocal
@@ -50,6 +50,7 @@ ENV = os.getenv("ENV")
 DEV_USER_ID = "user_2jfLb9a9wPGdc4vSPE1G3h8OVVI"
 CLERK_JWT_ISSUER = os.getenv("CLERK_JWT_ISSUER")
 CLERK_JWKS_URL = f"{CLERK_JWT_ISSUER}/.well-known/jwks.json"
+MAX_TOKENS = 4096  # TODO: make sure this aligns with the frontend
 
 if CLERK_JWT_ISSUER is None or CLERK_JWT_ISSUER == "":
     raise ValueError("Missing CLERK_JWT_ISSUER")
@@ -144,7 +145,15 @@ async def bot(
 ):
     clerk_id = token_data["sub"]
     user = get_user(db=db, clerk_id=clerk_id)
-    return get_or_create_bot(db=db, user_id=user.id)
+    bot = get_or_create_bot(db=db, user_id=user.id)
+    if tokens_for_context(bot.context) >= MAX_TOKENS:
+        name = bot.name
+        db.delete(bot)
+        db.commit()
+        raise HTTPException(
+            status_code=404, detail=f"Sorry, {name} is no longer with us."
+        )
+    return bot
 
 
 @app.get("/chat", response_class=StreamingResponse)
