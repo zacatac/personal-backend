@@ -144,7 +144,7 @@ async def bot(
     token_data: dict = Depends(optional_verify_token), db: Session = Depends(get_db)
 ):
     clerk_id = token_data["sub"]
-    user = get_user(db=db, clerk_id=clerk_id)
+    user = get_or_create_user(db=db, clerk_id=clerk_id)
     bot = get_or_create_bot(db=db, user_id=user.id)
     if tokens_for_context(bot.context) >= MAX_TOKENS:
         name = bot.name
